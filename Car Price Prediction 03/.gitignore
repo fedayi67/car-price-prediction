@@ -1,0 +1,9 @@
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local MLflow fallback store (only used when the CSIM server is unreachable)
+mlflow.db
+mlartifacts/
+mlruns/

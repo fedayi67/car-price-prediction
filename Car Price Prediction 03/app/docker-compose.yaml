@@ -1,0 +1,25 @@
+services:
+  car-price-classifier:
+    build: .
+    image: st127302/car-price-classifier:A3.0
+    ports:
+      - "8060:8060"
+    restart: unless-stopped
+
+    # --- Uncomment when deploying on the shared CSIM server (ml.brain.cs.ait.ac.th) ---
+    # The server routes every service through a Traefik reverse proxy keyed on
+    # subdomain rather than port (see A2's deployment notes). Replace
+    # `web-st127302-a3` with your own subdomain before deploying.
+    #
+    # networks:
+    #   - traefik-public
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.web-st127302-a3.rule=Host(`web-st127302-a3.ml.brain.cs.ait.ac.th`)"
+    #   - "traefik.http.routers.web-st127302-a3.entrypoints=websecure"
+    #   - "traefik.http.routers.web-st127302-a3.tls.certresolver=myresolver"
+    #   - "traefik.http.services.web-st127302-a3.loadbalancer.server.port=8060"
+
+# networks:
+#   traefik-public:
+#     external: true

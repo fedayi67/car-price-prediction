@@ -1,0 +1,77 @@
+name: CI/CD - Car Price Classifier (A3)
+
+# Runs on every push: first test, then (only if tests pass) build and publish
+# the Docker image. This is the CI/CD pipeline required by A3 Task 3,
+# Objective 3.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "Car Price Prediction 03/app/code/requirements.txt"
+          pip install pytest
+
+      - name: Run unit tests
+        run: |
+          pytest "Car Price Prediction 03/app/code/tests" -v
+
+  deploy:
+    name: Build & push Docker image
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: "Car Price Prediction 03/app"
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/car-price-classifier:A3.${{ github.run_number }}
+
+      # --- Redeploy on the CSIM server (ml.brain.cs.ait.ac.th) ---
+      # Requires SSH_HOST, SSH_USER and SSH_PRIVATE_KEY secrets (the private
+      # key half of the pair whose public half the TA installed on the
+      # server, per the A3 PDF's "Have an access to ml.brain server" step).
+      # Uncomment once those secrets are added to the repository.
+      #
+      # - name: Deploy over SSH
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.SSH_HOST }}
+      #     username: ${{ secrets.SSH_USER }}
+      #     key: ${{ secrets.SSH_PRIVATE_KEY }}
+      #     script: |
+      #       cd ~/car-price-classifier
+      #       docker compose pull
+      #       docker compose up -d
