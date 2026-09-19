@@ -10,6 +10,29 @@ Regression is implemented entirely from scratch**, including every metric in
 scikit-learn's `classification_report` (accuracy, per-class precision/recall/f1,
 macro- and support-weighted averages) and an optional Ridge (L2) penalty.
 
+## ⚠️ Current Status
+
+- **CI passing on GitHub Actions.** The `test` job in `.github/workflows/a3-ci-cd.yml`
+  has been verified green on real GitHub Actions runners (checkout → Python
+  setup → install deps → `pytest app/code/tests`), not just locally.
+- **Docker Hub push not yet configured.** The `deploy` job fails at the
+  "Log in to Docker Hub" step because the `DOCKERHUB_USERNAME` /
+  `DOCKERHUB_TOKEN` repository secrets haven't been added yet (Settings →
+  Secrets and variables → Actions). Add those two secrets to let it build and
+  push the image; the SSH redeploy step after it is commented out until
+  `SSH_HOST` / `SSH_USER` / `SSH_PRIVATE_KEY` secrets are added too.
+- **Shared MLflow server was down at submission time.** We connected to
+  `ml.brain.cs.ait.ac.th` directly over SSH (via the private key from A2) and
+  confirmed, from *inside* the server itself, that nothing is listening on
+  port 80 for `mlflow.ml.brain.cs.ait.ac.th` (`docker ps` shows no `traefik`
+  or `mlflow` container running — only other students' app containers). This
+  is not a network/VPN/credentials issue on our side. Task 3's MLflow
+  experiment tracking and Model Registry (staging) were therefore run against
+  a local SQLite-backed fallback (`sqlite:///mlflow.db`), which exercises the
+  exact same code path end-to-end. Re-running Sections 7–7.1 of the notebook
+  once the shared server is back up will log to it automatically with no code
+  changes.
+
 The project covers:
 
 - Data cleaning (reused, unchanged, from A1/A2)
