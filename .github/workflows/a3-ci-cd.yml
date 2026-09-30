@@ -57,21 +57,25 @@ jobs:
         with:
           context: "Car Price Prediction 03/app"
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/car-price-classifier:A3.${{ github.run_number }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/car-price-classifier:A3.${{ github.run_number }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/car-price-classifier:latest
 
       # --- Redeploy on the CSIM server (ml.brain.cs.ait.ac.th) ---
-      # Requires SSH_HOST, SSH_USER and SSH_PRIVATE_KEY secrets (the private
-      # key half of the pair whose public half the TA installed on the
-      # server, per the A3 PDF's "Have an access to ml.brain server" step).
-      # Uncomment once those secrets are added to the repository.
-      #
-      # - name: Deploy over SSH
-      #   uses: appleboy/ssh-action@v1
-      #   with:
-      #     host: ${{ secrets.SSH_HOST }}
-      #     username: ${{ secrets.SSH_USER }}
-      #     key: ${{ secrets.SSH_PRIVATE_KEY }}
-      #     script: |
-      #       cd ~/car-price-classifier
-      #       docker compose pull
-      #       docker compose up -d
+      # ml.brain is only reachable via the bazooka.cs.ait.ac.th jump host, so
+      # this hop through it using the same key. Requires SSH_HOST, SSH_USER
+      # and SSH_PRIVATE_KEY secrets (the private key half of the pair whose
+      # public half is authorized on both bazooka and ml.brain).
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          proxy_host: bazooka.cs.ait.ac.th
+          proxy_username: ${{ secrets.SSH_USER }}
+          proxy_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/car-price-classifier
+            docker compose pull
+            docker compose up -d
