@@ -12,26 +12,37 @@ macro- and support-weighted averages) and an optional Ridge (L2) penalty.
 
 ## ⚠️ Current Status
 
-- **CI passing on GitHub Actions.** The `test` job in `.github/workflows/a3-ci-cd.yml`
-  has been verified green on real GitHub Actions runners (checkout → Python
-  setup → install deps → `pytest app/code/tests`), not just locally.
-- **Docker Hub push not yet configured.** The `deploy` job fails at the
-  "Log in to Docker Hub" step because the `DOCKERHUB_USERNAME` /
-  `DOCKERHUB_TOKEN` repository secrets haven't been added yet (Settings →
-  Secrets and variables → Actions). Add those two secrets to let it build and
-  push the image; the SSH redeploy step after it is commented out until
-  `SSH_HOST` / `SSH_USER` / `SSH_PRIVATE_KEY` secrets are added too.
-- **Shared MLflow server was down at submission time.** We connected to
-  `ml.brain.cs.ait.ac.th` directly over SSH (via the private key from A2) and
-  confirmed, from *inside* the server itself, that nothing is listening on
-  port 80 for `mlflow.ml.brain.cs.ait.ac.th` (`docker ps` shows no `traefik`
-  or `mlflow` container running — only other students' app containers). This
-  is not a network/VPN/credentials issue on our side. Task 3's MLflow
-  experiment tracking and Model Registry (staging) were therefore run against
-  a local SQLite-backed fallback (`sqlite:///mlflow.db`), which exercises the
-  exact same code path end-to-end. Re-running Sections 7–7.1 of the notebook
-  once the shared server is back up will log to it automatically with no code
-  changes.
+- **CI/CD fully passing on GitHub Actions, end to end.** Every push to `main`
+  runs `.github/workflows/a3-ci-cd.yml`: `test` (checkout → Python setup →
+  install deps → `pytest app/code/tests`) → `deploy` (Docker Buildx → Docker
+  Hub login → build & push both an `A3.<run_number>` and a `latest` tag to
+  `st127302/car-price-classifier` → SSH into `ml.brain.cs.ait.ac.th`, via the
+  required `bazooka.cs.ait.ac.th` jump host, and run
+  `docker compose pull && docker compose up -d`). All steps verified green on
+  real GitHub Actions runners, not just locally.
+- **The app is confirmed running on the server.** `docker ps` on
+  `ml.brain.cs.ait.ac.th` shows the container `Up`, and
+  `curl http://localhost:8060/` from the server itself returns `200`.
+  It isn't reachable from a public URL yet, but that's not something wrong
+  with our deployment — see below.
+- **Shared Traefik reverse-proxy is down for everyone.** The server routes
+  every student's app through a shared Traefik container keyed by subdomain
+  (`*.ml.brain.cs.ait.ac.th`); that Traefik container simply isn't running
+  right now (`docker ps` shows no `traefik` container at all, for any
+  student). So no one's app is reachable from a public URL at the moment,
+  ours included, even though it's genuinely deployed and running. The
+  Traefik labels for our service are already written and commented out in
+  `app/docker-compose.yaml`, ready to enable the moment that shared service
+  comes back.
+- **Shared MLflow server was down at submission time**, for the same
+  underlying reason (same shared Traefik stack fronts it too). We connected
+  to `ml.brain.cs.ait.ac.th` directly over SSH and confirmed, from *inside*
+  the server itself, that nothing is listening on port 80 for
+  `mlflow.ml.brain.cs.ait.ac.th`. Task 3's MLflow experiment tracking and
+  Model Registry (staging) were therefore run against a local SQLite-backed
+  fallback (`sqlite:///mlflow.db`), which exercises the exact same code path
+  end-to-end. Re-running Sections 7–7.1 of the notebook once the shared
+  server is back up will log to it automatically with no code changes.
 
 The project covers:
 
@@ -125,20 +136,29 @@ Models tabs there for the submission — this repo's notebook, when run
 locally, uses the SQLite fallback and therefore does not have those
 screenshots.
 
-### CI/CD (`.github/workflows/ci-cd.yml`)
+### CI/CD (`.github/workflows/a3-ci-cd.yml`)
 
-1. **`test` job** — on every push, installs `app/code/requirements.txt` +
-   `pytest`, then runs `app/code/tests/test_model.py`, which contains the two
-   required unit tests: (1) the model accepts the expected input shape, and
-   (2) `predict`/`predict_proba` return the expected output shape.
-2. **`deploy` job** — runs only if `test` passes (`needs: test`). Builds the
-   Docker image from `app/` and pushes it to Docker Hub. Requires
-   `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` repository secrets.
-   A commented-out SSH step is included to redeploy the container on
-   `ml.brain.cs.ait.ac.th` via `docker compose pull && docker compose up -d`;
-   it needs `SSH_HOST` / `SSH_USER` / `SSH_PRIVATE_KEY` secrets before it can
-   run (the private half of the key pair the TA installs on the server, per
-   the assignment PDF).
+Fully working end-to-end, verified on real GitHub Actions runs:
+
+1. **`test` job** — installs `app/code/requirements.txt` + `pytest`, then runs
+   `app/code/tests/test_model.py` (the two required unit tests: the model
+   accepts the expected input shape, and `predict`/`predict_proba` return the
+   expected output shape).
+2. **`deploy` job** — runs only if `test` passes (`needs: test`):
+   - builds the Docker image from `app/` and pushes `A3.<run_number>` and
+     `latest` tags to Docker Hub (`DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`
+     secrets);
+   - SSHs into `ml.brain.cs.ait.ac.th` — via the required
+     `bazooka.cs.ait.ac.th` jump host, both hops using the same key
+     (`SSH_HOST` / `SSH_USER` / `SSH_PRIVATE_KEY` secrets) — and runs
+     `docker compose pull && docker compose up -d` to redeploy the container.
+
+Getting the SSH hop working required one extra one-time step beyond the
+assignment PDF's instructions: the private key was already authorized on
+`ml.brain` (per the PDF), but `bazooka` (the jump host) only accepted a
+password, which a non-interactive CI job can't provide. Fixed by appending
+the same public key to `bazooka`'s own `~/.ssh/authorized_keys`, so the whole
+jump chain is key-only now.
 
 ## 🖥️ Deployment — Dash Web Application
 
@@ -168,10 +188,15 @@ docker compose up --build
 # open http://localhost:8060
 ```
 
-To deploy on the CSIM server, uncomment the Traefik labels block in
-`app/docker-compose.yaml` (subdomain `web-st127302-a3` by default — change it
-to your own), then follow the same `ml.brain.cs.ait.ac.th` deployment steps
-used in A2 (SSH in with your registered private key, `docker compose up -d`).
+**Deployed on the CSIM server** at `~/car-price-classifier/docker-compose.yaml`
+on `ml.brain.cs.ait.ac.th`, kept up to date automatically by the CI/CD
+pipeline above (confirmed running via `docker ps` and a `200` from
+`curl http://localhost:8060/` on the server). It isn't reachable from a
+public URL yet because the shared Traefik reverse-proxy that routes
+`*.ml.brain.cs.ait.ac.th` isn't currently running on the server (true for
+every student's app right now). Once that's back up, uncomment the Traefik
+labels block in `app/docker-compose.yaml` (subdomain `web-st127302-a3` by
+default) and push — the CI/CD pipeline will pick up the change and redeploy.
 
 ## 📓 Notebook
 
