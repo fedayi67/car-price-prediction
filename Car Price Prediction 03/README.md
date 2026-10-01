@@ -34,15 +34,24 @@ macro- and support-weighted averages) and an optional Ridge (L2) penalty.
   Traefik labels for our service are already written and commented out in
   `app/docker-compose.yaml`, ready to enable the moment that shared service
   comes back.
-- **Shared MLflow server was down at submission time**, for the same
-  underlying reason (same shared Traefik stack fronts it too). We connected
-  to `ml.brain.cs.ait.ac.th` directly over SSH and confirmed, from *inside*
-  the server itself, that nothing is listening on port 80 for
-  `mlflow.ml.brain.cs.ait.ac.th`. Task 3's MLflow experiment tracking and
-  Model Registry (staging) were therefore run against a local SQLite-backed
-  fallback (`sqlite:///mlflow.db`), which exercises the exact same code path
-  end-to-end. Re-running Sections 7–7.1 of the notebook once the shared
-  server is back up will log to it automatically with no code changes.
+- **Shared MLflow server: still unreachable as of the latest check, despite
+  an announcement that it was fixed.** Course staff emailed updated access
+  details (`https://mlflow.ml.brain.cs.ait.ac.th`, rotated username/password)
+  saying the server was back up. Re-tested from two independent angles —
+  this machine, and from *inside* the CSIM network over SSH to
+  `ml.brain.cs.ait.ac.th` — and both still get `Connection refused` on ports
+  80 and 443. At the same time, `docker ps` on the shared server came back
+  completely empty (every student's container gone, ours included),
+  consistent with the shared infrastructure being mid-restart rather than a
+  problem with the new credentials or our code. (Our own container was
+  trivially redeployed with one `docker compose pull && docker compose up -d`
+  once this was noticed, confirming our own account/CI access is otherwise
+  unaffected.) Task 3's MLflow experiment tracking and Model Registry
+  (staging) were therefore run against a local SQLite-backed fallback
+  (`sqlite:///mlflow.db`), which exercises the exact same code path
+  end-to-end. The notebook already points at the real server and credential
+  env vars with no further code changes needed — re-running Sections 7–7.1
+  once the service is confirmed reachable will log there automatically.
 
 The project covers:
 
@@ -117,12 +126,14 @@ unregularized model.
 ### MLflow experiment tracking
 
 The notebook points `mlflow.set_tracking_uri()` at the CSIM server
-(`http://mlflow.ml.brain.cs.ait.ac.th/`) first, with experiment name
-`<student_id>-a3`. **If that server is unreachable** (e.g. running outside the
-AIT/CSIM network or VPN), it automatically falls back to a local
-SQLite-backed store (`sqlite:///mlflow.db`) so the full experiment + Model
-Registry workflow can still be exercised end-to-end. Re-running the notebook
-on the CSIM network logs to the real server with no code changes needed.
+(`https://mlflow.ml.brain.cs.ait.ac.th`) first, with experiment name
+`<student_id>-a3`, reading the Basic Auth credential from
+`MLFLOW_TRACKING_USERNAME` / `MLFLOW_TRACKING_PASSWORD` environment variables
+(never hardcoded, since this notebook is in a public repo). **If that server
+is unreachable**, it automatically falls back to a local SQLite-backed store
+(`sqlite:///mlflow.db`) so the full experiment + Model Registry workflow can
+still be exercised end-to-end — see "Current Status" above for why that
+fallback is currently what actually runs.
 
 The dataset itself is never logged (only params, metrics, and the model
 artifact), per the assignment's instructions.
